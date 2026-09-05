@@ -1,6 +1,7 @@
 import ServiceProviderPage from "../serviceprovider/ServiceProviderPage";
 import HiringCard from "./HiringCard";
 import { Link} from "react-router-dom";
+import './CareersPage.css';
 
 function CareersPage() {
 
@@ -42,13 +43,15 @@ function CareersPage() {
                 position={"Interior Designer"}
                 salary={"Earn upto ₹10 LPA"}
             />
-            <div class="d-flex justify-content-center mt-5">
-                <Link to="/provider">
-                    <button className="btn  btn-lg ">
-                        Join Us!
-                    </button>
-                </Link>
-            </div>
+<div className="d-flex justify-content-center mt-5">
+    <Link to="/provider" className="career-link">
+        <button className="career-btn">
+            <span className="career-spark">✦</span>
+            <span>Build Your Career with HomiGo</span>
+            <span className="career-arrow">↗</span>
+        </button>
+    </Link>
+</div>
         </>
     );
 }

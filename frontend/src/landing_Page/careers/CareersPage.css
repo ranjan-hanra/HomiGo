@@ -1,0 +1,145 @@
+.career-link {
+    text-decoration: none;
+}
+
+
+/* Main Button */
+.career-btn {
+    position: relative;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 11px;
+
+    padding: 11px 12px 11px 20px;
+
+    border: 1.5px solid #28b9a5;
+    border-radius: 18px 32px 18px 32px;
+
+    background: linear-gradient(
+        135deg,
+        #ffffff,
+        #f1fffc
+    );
+
+    color: #202b2a;
+
+    font-size: 15px;
+    font-weight: 650;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 5px 0 rgba(40, 185, 165, 0.10),
+        0 10px 24px rgba(40, 185, 165, 0.14);
+
+    overflow: hidden;
+
+    transition:
+        transform 0.3s ease,
+        box-shadow 0.3s ease,
+        background 0.3s ease,
+        color 0.3s ease;
+}
+
+
+/* Sparkle */
+.career-spark {
+    color: #11ad98;
+    font-size: 16px;
+
+    transition: transform 0.4s ease;
+}
+
+
+/* Arrow box */
+.career-arrow {
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 13px;
+
+    background: linear-gradient(
+        135deg,
+        #20b7a3,
+        #08a890
+    );
+
+    color: white;
+
+    font-size: 20px;
+    font-weight: 400;
+
+    transition: all 0.35s ease;
+}
+
+
+/* Decorative curved line */
+.career-btn::before {
+    content: "";
+
+    position: absolute;
+
+    top: -11px;
+    left: 30px;
+
+    width: 65px;
+    height: 20px;
+
+    border-top: 2px solid #70d6c8;
+    border-radius: 50%;
+
+    transform: rotate(-5deg);
+
+    opacity: 0.8;
+}
+
+
+/* Hover */
+.career-btn:hover {
+    transform: translateY(-4px);
+
+    background: linear-gradient(
+        135deg,
+        #00bfa6,
+        #12c4ad
+    );
+
+    color: white;
+
+    border-color: #00bfa6;
+
+    box-shadow:
+        0 7px 0 rgba(0, 191, 166, 0.15),
+        0 16px 30px rgba(0, 191, 166, 0.25);
+}
+
+
+/* Sparkle animation */
+.career-btn:hover .career-spark {
+    color: white;
+    transform: rotate(180deg) scale(1.25);
+}
+
+
+/* Arrow animation */
+.career-btn:hover .career-arrow {
+    background: white;
+    color: #00bfa6;
+
+    transform: translate(3px, -3px) rotate(-8deg);
+
+    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.08);
+}
+
+
+/* Click */
+.career-btn:active {
+    transform: translateY(-1px) scale(0.97);
+}
