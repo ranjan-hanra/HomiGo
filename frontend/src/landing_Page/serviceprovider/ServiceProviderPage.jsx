@@ -6,10 +6,7 @@ const menuItems = [
     { id: "bookings", label: "Bookings", icon: "fa-calendar-check" },
     { id: "earnings", label: "Earnings", icon: "fa-wallet" },
     { id: "services", label: "My Services", icon: "fa-briefcase" },
-    { id: "availability", label: "Availability", icon: "fa-clock" },
     { id: "profile", label: "Profile", icon: "fa-user" },
-    { id: "reviews", label: "Reviews & Ratings", icon: "fa-star" },
-    { id: "notifications", label: "Notifications", icon: "fa-bell", badge: 3 },
     { id: "support", label: "Support", icon: "fa-headset" },
     { id: "settings", label: "Settings", icon: "fa-gear" },
 ];
@@ -119,6 +116,7 @@ function ServiceProviderPage() {
             {mobileMenu && <button className="provider-overlay" onClick={() => setMobileMenu(false)} aria-label="Close menu" />}
 
             <main className="provider-main">
+                {activePage === "overview" && (
                 <header className="provider-topbar">
                     <button className="provider-mobile-toggle" onClick={() => setMobileMenu(true)}>
                         <i className="fa-solid fa-bars" />
@@ -135,7 +133,8 @@ function ServiceProviderPage() {
                                 <span />
                             </button>
                         </div>
-                        <div className="provider-notification-wrap">
+                        {activePage === "overview" && (
+                            <div className="provider-notification-wrap">
                             <button className="provider-icon-button" onClick={() => setShowNotifications(!showNotifications)}>
                                 <i className="fa-regular fa-bell" />
                                 <b>3</b>
@@ -149,6 +148,7 @@ function ServiceProviderPage() {
                                 </div>
                             )}
                         </div>
+                        )}
                         <div className="provider-top-user">
                             <div className="provider-avatar small">{initials}</div>
                             <div><strong>{providerName}</strong><span>Provider</span></div>
@@ -156,8 +156,10 @@ function ServiceProviderPage() {
                         </div>
                     </div>
                 </header>
+            )}
 
                 <section className="provider-content">
+                    {activePage !== "overview" && <button className="provider-mobile-toggle provider-section-mobile-toggle" onClick={() => setMobileMenu(true)} aria-label="Open menu"><i className="fa-solid fa-bars" /></button>}
                     {activePage === "overview" && (
                         <>
                             <div className="provider-welcome">
@@ -233,13 +235,7 @@ function ServiceProviderPage() {
 
                     {activePage === "services" && <DashboardSection title="My Services" subtitle="Manage the services, pricing and status visible to HomiGo customers."><div className="provider-service-grid">{services.map((service) => <div className="provider-service-card" key={service.name}><div className="service-card-icon"><i className="fa-solid fa-briefcase" /></div><div><h3>{service.name}</h3><p>{service.bookings} bookings this month</p><strong>{service.price}</strong></div><StatusBadge status={service.status} /><button className="provider-outline-btn">Edit Service</button></div>)}</div></DashboardSection>}
 
-                    {activePage === "availability" && <DashboardSection title="Availability" subtitle="Set when customers can request your services."><div className="provider-panel availability-panel"><div className="availability-header"><div><h3>Service Availability</h3><p>Customers can book you during your active hours.</p></div><button onClick={() => setAvailability(!availability)} className={`availability-big-toggle ${availability ? "on" : "off"}`}><span /> {availability ? "Available for bookings" : "Currently offline"}</button></div>{["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((day) => <div className="day-row" key={day}><strong>{day}</strong><span>09:00 AM — 07:00 PM</span><i className="fa-solid fa-circle-check" /></div>)}</div></DashboardSection>}
-
                     {activePage === "profile" && <DashboardSection title="Profile" subtitle="Keep your provider profile and verification details updated."><div className="provider-profile-layout"><div className="provider-panel profile-card"><div className="large-avatar">{initials}</div><h2>{providerName}</h2><p>Professional Service Provider</p><StatusBadge status="Verified" /><button className="provider-primary-btn">Edit Profile</button></div><div className="provider-panel details-card"><h3>Professional Details</h3><div className="detail-grid"><div><span>Email</span><strong>{savedUser?.email || "provider@homigo.com"}</strong></div><div><span>Phone</span><strong>+91 98765 43210</strong></div><div><span>Service Area</span><strong>Kolkata & nearby areas</strong></div><div><span>Experience</span><strong>5+ years</strong></div><div><span>Verification</span><strong>Identity Verified ✓</strong></div><div><span>Joined HomiGo</span><strong>January 2026</strong></div></div></div></div></DashboardSection>}
-
-                    {activePage === "reviews" && <DashboardSection title="Reviews & Ratings" subtitle="See what customers say about your work."><div className="provider-review-summary"><div><strong>4.8</strong><span>★ ★ ★ ★ ★</span><small>128 total reviews</small></div><div className="rating-bars">{[[5,82],[4,12],[3,4],[2,1],[1,1]].map(([star, width]) => <div key={star}><span>{star} ★</span><div><i style={{ width: `${width}%` }} /></div><b>{width}%</b></div>)}</div></div><div className="provider-panel review-list">{["Excellent service and very professional.","Arrived on time and completed the work perfectly.","Very polite and helpful. Highly recommended!"].map((text,i)=><div className="review-row" key={i}><div className="review-avatar">{["AS","PM","RK"][i]}</div><div><strong>{["Ananya S.","Priya M.","Rahul K."][i]}</strong><span>★★★★★</span><p>{text}</p></div></div>)}</div></DashboardSection>}
-
-                    {activePage === "notifications" && <DashboardSection title="Notifications" subtitle="Stay updated about bookings, payments and HomiGo announcements."><div className="provider-panel notification-list">{["New booking request for Home Cleaning","Your weekly payout of ₹8,450 has been processed","You received a 5-star review from Ananya S.","Complete your provider profile to unlock more opportunities"].map((text,i)=><div key={text}><i className={`fa-solid ${["fa-calendar-check","fa-wallet","fa-star","fa-user-check"][i]}`} /><div><strong>{text}</strong><span>{i+1} hour{i === 0 ? "" : "s"} ago</span></div></div>)}</div></DashboardSection>}
 
                     {activePage === "support" && <DashboardSection title="Support" subtitle="Need help? Raise a ticket and our team will get back to you."><div className="support-cards"><div className="provider-panel support-card"><i className="fa-solid fa-headset" /><h3>Provider Support</h3><p>Get help with bookings, payments or account issues.</p><button className="provider-primary-btn">Raise a Ticket</button></div><div className="provider-panel support-card"><i className="fa-regular fa-circle-question" /><h3>Help Center</h3><p>Find quick answers to common provider questions.</p><button className="provider-outline-btn">Browse Help</button></div></div></DashboardSection>}
 
