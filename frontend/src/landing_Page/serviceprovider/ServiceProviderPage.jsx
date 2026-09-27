@@ -1,253 +1,1518 @@
-import { useMemo, useState } from "react";
-import "./ServiceProviderPage.css";
+import { useCallback, useEffect, useRef, useState } from "react";
+import axios from "axios";
+
+const providerApi = axios.create({
+    baseURL: `${import.meta.env.VITE_API_URL}/api/provider`,
+    withCredentials: true,
+});
 
 const menuItems = [
-    { id: "overview", label: "Overview", icon: "fa-house" },
-    { id: "bookings", label: "Bookings", icon: "fa-calendar-check" },
-    { id: "earnings", label: "Earnings", icon: "fa-wallet" },
-    { id: "services", label: "My Services", icon: "fa-briefcase" },
-    { id: "profile", label: "Profile", icon: "fa-user" },
-    { id: "support", label: "Support", icon: "fa-headset" },
-    { id: "settings", label: "Settings", icon: "fa-gear" },
+    { id: "overview", label: "Overview", icon: "▦" },
+    { id: "current", label: "Current Booking", icon: "▣" },
+    { id: "history", label: "Booking History", icon: "◷" },
+    { id: "profile", label: "Profile", icon: "◉" },
 ];
 
-const bookings = [
-    { id: "#BOOK-1234", service: "Home Cleaning", date: "May 26, 10:30 AM", status: "Upcoming" },
-    { id: "#BOOK-1233", service: "AC Repair", date: "May 26, 01:15 PM", status: "Ongoing" },
-    { id: "#BOOK-1232", service: "Plumbing", date: "May 25, 03:00 PM", status: "Completed" },
-    { id: "#BOOK-1231", service: "Salon for Women", date: "May 24, 11:00 AM", status: "Completed" },
-    { id: "#BOOK-1230", service: "Tiles Style", date: "May 24, 09:30 AM", status: "Cancelled" },
-];
+const CURRENT_STATUSES = ["pending", "accepted", "in_progress", "upcoming"];
+const HISTORY_STATUSES = ["completed", "cancelled"];
 
-const services = [
-    { name: "Home Cleaning", bookings: 18, price: "₹699", status: "Active" },
-    { name: "AC Repair", bookings: 12, price: "₹499", status: "Active" },
-    { name: "Plumbing", bookings: 8, price: "₹399", status: "Active" },
-    { name: "Salon for Women", bookings: 5, price: "₹599", status: "Active" },
-    { name: "Painting", bookings: 3, price: "₹1,299", status: "Paused" },
-];
+function getBookingId(booking) {
+    return booking?._id || booking?.id || "";
+}
 
-function StatCard({ icon, label, value, change, iconClass = "" }) {
-    return (
-        <div className="provider-stat-card">
-            <div className={`provider-stat-icon ${iconClass}`}>
-                <i className={`fa-solid ${icon}`} />
-            </div>
-            <div className="provider-stat-content">
-                <span>{label}</span>
-                <strong>{value}</strong>
-                {change && <small><i className="fa-solid fa-arrow-up" /> {change}</small>}
-            </div>
-        </div>
-    );
+function getCustomer(booking) {
+    return booking?.user?.name || booking?.customerName || "Customer";
+}
+
+function getService(booking) {
+    return booking?.service?.name || booking?.serviceName || "Service";
+}
+
+function getAmount(booking) {
+    return booking?.totalAmount ?? booking?.amount ?? 0;
+}
+
+function getPaymentStatus(booking) {
+    return booking?.paymentStatus || "pending";
+}
+
+function formatMoney(value) {
+    return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
+function formatDate(value) {
+    if (!value) return "—";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "—";
+
+    return date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    });
+}
+
+function prettyStatus(value) {
+    return String(value || "pending")
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function StatusBadge({ status }) {
-    return <span className={`provider-status provider-status-${status.toLowerCase()}`}>{status}</span>;
-}
+    const normalized = String(status || "pending").toLowerCase();
 
-function ServiceProviderPage() {
-    const [activePage, setActivePage] = useState("overview");
-    const [mobileMenu, setMobileMenu] = useState(false);
-    const [availability, setAvailability] = useState(true);
-    const [showNotifications, setShowNotifications] = useState(false);
-
-    const savedUser = useMemo(() => {
-        try {
-            return JSON.parse(localStorage.getItem("user")) || null;
-        } catch {
-            return null;
-        }
-    }, []);
-
-    const providerName = savedUser?.fullname || "Rohit Kumar";
-    const initials = providerName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-
-    const selectPage = (page) => {
-        setActivePage(page);
-        setMobileMenu(false);
-    };
+    const className =
+        {
+            pending: "text-bg-secondary",
+            accepted: "text-bg-primary",
+            upcoming: "text-bg-warning",
+            in_progress: "text-bg-warning",
+            completed: "text-bg-success",
+            cancelled: "text-bg-danger",
+        }[normalized] || "text-bg-secondary";
 
     return (
-        <div className="provider-dashboard">
-            <aside className={`provider-sidebar ${mobileMenu ? "provider-sidebar-open" : ""}`}>
-                <div className="provider-brand">
-                    <img src="/media/images/HomiGoLogo.png" alt="HomiGo" />
-                    <span>Provider Portal</span>
-                </div>
+        <span className={`badge ${className}`}>
+            {prettyStatus(status)}
+        </span>
+    );
+}
 
-                <div className="provider-profile-mini">
-                    <div className="provider-avatar">{initials}</div>
-                    <div>
-                        <strong>{providerName}</strong>
-                        <span>Service Provider</span>
-                    </div>
-                </div>
+function PaymentBadge({ status }) {
+    const normalized = String(status || "pending").toLowerCase();
 
-                <nav className="provider-nav">
-                    <p className="provider-nav-title">WORKSPACE</p>
-                    {menuItems.map((item) => (
-                        <button
-                            key={item.id}
-                            className={`provider-nav-item ${activePage === item.id ? "active" : ""}`}
-                            onClick={() => selectPage(item.id)}
-                        >
-                            <i className={`fa-solid ${item.icon}`} />
-                            <span>{item.label}</span>
-                            {item.badge && <em>{item.badge}</em>}
-                        </button>
-                    ))}
-                </nav>
+    const className =
+        {
+            paid: "text-bg-success",
+            pending: "text-bg-warning",
+            failed: "text-bg-danger",
+            refunded: "text-bg-info",
+        }[normalized] || "text-bg-secondary";
 
-                <div className="provider-sidebar-bottom">
-                    <div className="provider-help-card">
-                        <i className="fa-solid fa-circle-question" />
-                        <div>
-                            <strong>Need help?</strong>
-                            <span>We're here for you.</span>
-                        </div>
-                    </div>
-                    <button className="provider-logout" onClick={() => window.location.href = "/"}>
-                        <i className="fa-solid fa-arrow-left" /> Back to HomiGo
-                    </button>
-                </div>
-            </aside>
+    return (
+        <span className={`badge ${className}`}>
+            {prettyStatus(status)}
+        </span>
+    );
+}
 
-            {mobileMenu && <button className="provider-overlay" onClick={() => setMobileMenu(false)} aria-label="Close menu" />}
-
-            <main className="provider-main">
-                {activePage === "overview" && (
-                <header className="provider-topbar">
-                    <button className="provider-mobile-toggle" onClick={() => setMobileMenu(true)}>
-                        <i className="fa-solid fa-bars" />
-                    </button>
-                    <div className="provider-top-title">
-                        <span>HOMIGO PROVIDER PORTAL</span>
-                        <h1>{menuItems.find((item) => item.id === activePage)?.label || "Overview"}</h1>
-                    </div>
-                    <div className="provider-top-actions">
-                        <div className="provider-availability-toggle">
-                            <span className={availability ? "online-dot" : "offline-dot"} />
-                            <span>{availability ? "Available" : "Offline"}</span>
-                            <button onClick={() => setAvailability(!availability)} className={availability ? "toggle-on" : "toggle-off"} aria-label="Toggle availability">
-                                <span />
-                            </button>
-                        </div>
-                        {activePage === "overview" && (
-                            <div className="provider-notification-wrap">
-                            <button className="provider-icon-button" onClick={() => setShowNotifications(!showNotifications)}>
-                                <i className="fa-regular fa-bell" />
-                                <b>3</b>
-                            </button>
-                            {showNotifications && (
-                                <div className="provider-notification-popover">
-                                    <strong>Notifications</strong>
-                                    <p><i className="fa-solid fa-calendar-check" /> New booking request received.</p>
-                                    <p><i className="fa-solid fa-star" /> You received a 5-star review.</p>
-                                    <p><i className="fa-solid fa-wallet" /> Weekly payout is ready.</p>
-                                </div>
-                            )}
-                        </div>
-                        )}
-                        <div className="provider-top-user">
-                            <div className="provider-avatar small">{initials}</div>
-                            <div><strong>{providerName}</strong><span>Provider</span></div>
-                            <i className="fa-solid fa-chevron-down" />
-                        </div>
-                    </div>
-                </header>
-            )}
-
-                <section className="provider-content">
-                    {activePage !== "overview" && <button className="provider-mobile-toggle provider-section-mobile-toggle" onClick={() => setMobileMenu(true)} aria-label="Open menu"><i className="fa-solid fa-bars" /></button>}
-                    {activePage === "overview" && (
-                        <>
-                            <div className="provider-welcome">
-                                <div>
-                                    <h2>Welcome back, {providerName.split(" ")[0]}! <span>👋</span></h2>
-                                    <p>Here’s what’s happening with your HomiGo business today.</p>
-                                </div>
-                                <button className="provider-primary-btn" onClick={() => selectPage("services")}>
-                                    <i className="fa-solid fa-plus" /> Add Service
-                                </button>
-                            </div>
-
-                            <div className="provider-stats-grid">
-                                <StatCard icon="fa-sack-dollar" label="Total Earnings" value="₹24,580" change="12.5% this month" />
-                                <StatCard icon="fa-calendar-check" label="Total Bookings" value="48" change="8.2% this month" />
-                                <StatCard icon="fa-circle-check" label="Completed Jobs" value="36" change="10.1% this month" />
-                                <StatCard icon="fa-star" label="Rating" value="4.8" change="Based on 128 reviews" iconClass="rating-icon" />
-                                <StatCard icon="fa-circle-check" label="Profile Status" value="Verified" change="All good!" iconClass="verified-icon" />
-                            </div>
-
-                            <div className="provider-main-grid">
-                                <div className="provider-panel earnings-panel">
-                                    <div className="provider-panel-heading">
-                                        <div><h3>Earnings Overview</h3><span>Track your business performance</span></div>
-                                        <select defaultValue="week"><option value="week">This Week</option><option value="month">This Month</option></select>
-                                    </div>
-                                    <div className="provider-chart">
-                                        <div className="chart-y-labels"><span>₹8K</span><span>₹6K</span><span>₹4K</span><span>₹2K</span><span>₹0</span></div>
-                                        <svg viewBox="0 0 700 260" preserveAspectRatio="none" role="img" aria-label="Earnings chart">
-                                            <defs>
-                                                <linearGradient id="providerFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2cc6a5" stopOpacity=".28" /><stop offset="100%" stopColor="#2cc6a5" stopOpacity=".02" /></linearGradient>
-                                            </defs>
-                                            <line x1="0" y1="40" x2="700" y2="40" /><line x1="0" y1="95" x2="700" y2="95" /><line x1="0" y1="150" x2="700" y2="150" /><line x1="0" y1="205" x2="700" y2="205" />
-                                            <path d="M0,205 C70,165 80,170 140,120 C190,78 205,135 260,145 C315,155 335,82 390,75 C445,68 470,75 520,78 C565,82 590,145 625,112 C650,88 675,48 700,35 L700,235 L0,235 Z" fill="url(#providerFill)" />
-                                            <path d="M0,205 C70,165 80,170 140,120 C190,78 205,135 260,145 C315,155 335,82 390,75 C445,68 470,75 520,78 C565,82 590,145 625,112 C650,88 675,48 700,35" fill="none" stroke="#18b996" strokeWidth="4" strokeLinecap="round" />
-                                            {[0,140,260,390,520,625,700].map((x, i) => <circle key={i} cx={x} cy={[205,120,145,75,78,112,35][i]} r="5" fill="#fff" stroke="#18b996" strokeWidth="3" />)}
-                                        </svg>
-                                        <div className="chart-x-labels"><span>May 20</span><span>May 21</span><span>May 22</span><span>May 23</span><span>May 24</span><span>May 25</span><span>May 26</span></div>
-                                    </div>
-                                </div>
-
-                                <div className="provider-panel recent-panel">
-                                    <div className="provider-panel-heading"><div><h3>Recent Bookings</h3><span>Latest activity</span></div><button onClick={() => selectPage("bookings")}>View All</button></div>
-                                    <div className="provider-booking-list">
-                                        {bookings.map((booking) => <div className="provider-booking-row" key={booking.id}><div><strong>{booking.id}</strong><span>{booking.service}</span><small>{booking.date}</small></div><StatusBadge status={booking.status} /></div>)}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="provider-bottom-grid">
-                                <div className="provider-panel">
-                                    <div className="provider-panel-heading"><div><h3>Top Services</h3><span>Most booked this month</span></div><button onClick={() => selectPage("services")}>View All</button></div>
-                                    <div className="provider-simple-list">{services.slice(0, 5).map((service) => <div key={service.name}><span><i className="fa-solid fa-circle-check" /> {service.name}</span><strong>{service.bookings} bookings</strong></div>)}</div>
-                                </div>
-                                <div className="provider-panel">
-                                    <div className="provider-panel-heading"><div><h3>Earnings Summary</h3><span>This month</span></div></div>
-                                    <div className="provider-summary"><div><span>Total Earnings</span><strong>₹24,580</strong></div><div><span>Platform Fees</span><strong className="negative">- ₹2,150</strong></div><div><span>Other Deductions</span><strong className="negative">- ₹350</strong></div><div className="summary-total"><span>Net Payout</span><strong>₹22,080</strong></div></div>
-                                    <button className="provider-outline-btn" onClick={() => selectPage("earnings")}>View Payout History</button>
-                                </div>
-                                <div className="provider-panel profile-completion">
-                                    <div className="provider-panel-heading"><div><h3>Profile Completion</h3><span>Complete your profile to get more bookings.</span></div></div>
-                                    <div className="completion-row"><div className="completion-ring"><span>80%</span></div><strong>Great!</strong></div>
-                                    <ul><li>Basic Information <i className="fa-solid fa-circle-check" /></li><li>Identity Verification <i className="fa-solid fa-circle-check" /></li><li>Bank Details <i className="fa-solid fa-circle-check" /></li><li>Add Services <i className="fa-regular fa-circle" /></li></ul>
-                                    <button className="provider-outline-btn" onClick={() => selectPage("profile")}>Complete Now</button>
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {activePage === "bookings" && <DashboardSection title="Bookings" subtitle="Manage upcoming, ongoing and completed customer bookings."><div className="provider-table-wrap"><table className="provider-table"><thead><tr><th>Booking ID</th><th>Service</th><th>Date & Time</th><th>Status</th><th>Action</th></tr></thead><tbody>{bookings.map((b) => <tr key={b.id}><td><strong>{b.id}</strong></td><td>{b.service}</td><td>{b.date}</td><td><StatusBadge status={b.status} /></td><td><button className="table-action">View</button></td></tr>)}</tbody></table></div></DashboardSection>}
-
-                    {activePage === "earnings" && <DashboardSection title="Earnings" subtitle="Track your earnings, fees and payout history."><div className="provider-stats-grid"><StatCard icon="fa-sack-dollar" label="Gross Earnings" value="₹24,580" change="12.5% this month" /><StatCard icon="fa-money-bill-transfer" label="Net Payout" value="₹22,080" change="After deductions" /><StatCard icon="fa-clock" label="Pending Payout" value="₹3,240" change="Processing" /></div><div className="provider-panel provider-large-panel"><h3>Recent Payouts</h3><div className="provider-simple-list payout-list"><div><span>May 24, 2026</span><strong>₹8,450 <StatusBadge status="Completed" /></strong></div><div><span>May 17, 2026</span><strong>₹7,120 <StatusBadge status="Completed" /></strong></div><div><span>May 10, 2026</span><strong>₹6,510 <StatusBadge status="Completed" /></strong></div></div></div></DashboardSection>}
-
-                    {activePage === "services" && <DashboardSection title="My Services" subtitle="Manage the services, pricing and status visible to HomiGo customers."><div className="provider-service-grid">{services.map((service) => <div className="provider-service-card" key={service.name}><div className="service-card-icon"><i className="fa-solid fa-briefcase" /></div><div><h3>{service.name}</h3><p>{service.bookings} bookings this month</p><strong>{service.price}</strong></div><StatusBadge status={service.status} /><button className="provider-outline-btn">Edit Service</button></div>)}</div></DashboardSection>}
-
-                    {activePage === "profile" && <DashboardSection title="Profile" subtitle="Keep your provider profile and verification details updated."><div className="provider-profile-layout"><div className="provider-panel profile-card"><div className="large-avatar">{initials}</div><h2>{providerName}</h2><p>Professional Service Provider</p><StatusBadge status="Verified" /><button className="provider-primary-btn">Edit Profile</button></div><div className="provider-panel details-card"><h3>Professional Details</h3><div className="detail-grid"><div><span>Email</span><strong>{savedUser?.email || "provider@homigo.com"}</strong></div><div><span>Phone</span><strong>+91 98765 43210</strong></div><div><span>Service Area</span><strong>Kolkata & nearby areas</strong></div><div><span>Experience</span><strong>5+ years</strong></div><div><span>Verification</span><strong>Identity Verified ✓</strong></div><div><span>Joined HomiGo</span><strong>January 2026</strong></div></div></div></div></DashboardSection>}
-
-                    {activePage === "support" && <DashboardSection title="Support" subtitle="Need help? Raise a ticket and our team will get back to you."><div className="support-cards"><div className="provider-panel support-card"><i className="fa-solid fa-headset" /><h3>Provider Support</h3><p>Get help with bookings, payments or account issues.</p><button className="provider-primary-btn">Raise a Ticket</button></div><div className="provider-panel support-card"><i className="fa-regular fa-circle-question" /><h3>Help Center</h3><p>Find quick answers to common provider questions.</p><button className="provider-outline-btn">Browse Help</button></div></div></DashboardSection>}
-
-                    {activePage === "settings" && <DashboardSection title="Settings" subtitle="Manage your account preferences and notifications."><div className="provider-panel settings-list"><label><span><strong>Booking notifications</strong><small>Get notified when a customer books your service.</small></span><input type="checkbox" defaultChecked /></label><label><span><strong>Payment notifications</strong><small>Receive updates when a payout is processed.</small></span><input type="checkbox" defaultChecked /></label><label><span><strong>Marketing updates</strong><small>Receive useful offers and growth tips from HomiGo.</small></span><input type="checkbox" /></label><label><span><strong>Profile visibility</strong><small>Allow customers to discover your provider profile.</small></span><input type="checkbox" defaultChecked /></label></div></DashboardSection>}
-                </section>
-            </main>
+function Avatar({ name, size = 42 }) {
+    return (
+        <div
+            className="rounded-circle bg-success-subtle text-success fw-bold d-flex align-items-center justify-content-center flex-shrink-0"
+            style={{ width: size, height: size }}
+        >
+            {(name || "P").charAt(0).toUpperCase()}
         </div>
     );
 }
 
-function DashboardSection({ title, subtitle, children }) {
-    return <div className="provider-page-section"><div className="provider-section-heading"><div><span>HOMIGO PROVIDER PORTAL</span><h2>{title}</h2><p>{subtitle}</p></div><button className="provider-icon-action"><i className="fa-solid fa-ellipsis" /></button></div>{children}</div>;
+function Card({ title, action, children, className = "" }) {
+    return (
+        <div className={`card border-0 shadow-sm ${className}`}>
+            {(title || action) && (
+                <div className="card-header bg-white border-0 px-3 px-md-4 pt-3 pt-md-4">
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                        {title && <h5 className="mb-0 fw-semibold">{title}</h5>}
+                        {action}
+                    </div>
+                </div>
+            )}
+
+            <div className="card-body px-3 px-md-4">{children}</div>
+        </div>
+    );
 }
 
-export default ServiceProviderPage;
+function Sidebar({
+    providerName,
+    activePage,
+    goTo,
+    availability,
+    toggleAvailability,
+    open,
+    logout,
+}) {
+    return (
+        <>
+            <aside
+                className={`bg-white border-end position-fixed top-0 bottom-0 start-0 z-3 ${
+                    open ? "d-block" : "d-none"
+                } d-lg-block`}
+                style={{ width: 250 }}
+            >
+                <div className="d-flex flex-column h-100 p-3">
+                    <div className="d-flex align-items-center gap-2 px-2 mb-4">
+                        <img
+                            src="/media/images/HomiGoLogo.png"
+                            alt="HomiGo"
+                            style={{
+                                width: 38,
+                                height: 38,
+                                objectFit: "contain",
+                            }}
+                        />
+                        <span className="fs-4 fw-bold">HomiGo</span>
+                    </div>
+
+                    <div className="d-flex align-items-center gap-2 px-2 mb-4">
+                        <Avatar name={providerName} />
+                        <div className="min-w-0">
+                            <div className="fw-semibold text-truncate">
+                                {providerName}
+                            </div>
+                            <small className="text-muted">
+                                Service Provider
+                            </small>
+                        </div>
+                    </div>
+
+                    <div className="border rounded-3 p-3 mb-3">
+                        <div className="d-flex justify-content-between align-items-center gap-2">
+                            <div>
+                                <div className="small fw-semibold">
+                                    {availability
+                                        ? "Available"
+                                        : "Not available"}
+                                </div>
+
+                                <small className="text-muted">
+                                    {availability
+                                        ? "Accepting bookings"
+                                        : "Bookings paused"}
+                                </small>
+                            </div>
+
+                            <div className="form-check form-switch m-0">
+                                <input
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    role="switch"
+                                    checked={availability}
+                                    onChange={toggleAvailability}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <nav className="nav nav-pills flex-column gap-1">
+                        {menuItems.map((item) => (
+                            <button
+                                key={item.id}
+                                type="button"
+                                className={`nav-link text-start d-flex align-items-center gap-3 ${
+                                    activePage === item.id
+                                        ? "active"
+                                        : "text-dark"
+                                }`}
+                                onClick={() => goTo(item.id)}
+                            >
+                                <span>{item.icon}</span>
+                                <span>{item.label}</span>
+                            </button>
+                        ))}
+                    </nav>
+
+                    <div className="mt-auto">
+                        <button
+                            type="button"
+                            className="btn btn-light w-100 text-start mb-2"
+                            onClick={() => (window.location.href = "/")}
+                        >
+                            ← Back to HomiGo
+                        </button>
+
+                        <button
+                            type="button"
+                            className="btn btn-outline-danger w-100"
+                            onClick={logout}
+                        >
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            {open && (
+                <div
+                    className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-25 z-2 d-lg-none"
+                    onClick={() => goTo(activePage)}
+                />
+            )}
+        </>
+    );
+}
+
+function Topbar({
+    providerName,
+    availability,
+    toggleAvailability,
+    openMenu,
+    notificationCount,
+    notificationOpen,
+    setNotificationOpen,
+    currentBookings,
+    goTo,
+}) {
+    return (
+        <header className="bg-white border-bottom sticky-top">
+            <div className="container-fluid px-3 px-md-4">
+                <div className="d-flex align-items-center justify-content-between gap-3 py-3">
+                    <div className="d-flex align-items-center gap-2">
+                        <button
+                            type="button"
+                            className="btn btn-light d-lg-none"
+                            onClick={openMenu}
+                        >
+                            ☰
+                        </button>
+
+                        <div>
+                            <div className="fw-semibold">
+                                Provider Dashboard
+                            </div>
+                            <small className="text-muted d-none d-sm-block">
+                                Manage your bookings
+                            </small>
+                        </div>
+                    </div>
+
+                    <div className="d-flex align-items-center gap-2">
+                        <button
+                            type="button"
+                            className="btn btn-sm d-none d-sm-inline-block"
+                            onClick={toggleAvailability}
+                        >
+                            <span
+                                className={`badge ${
+                                    availability
+                                        ? "text-bg-success"
+                                        : "text-bg-secondary"
+                                }`}
+                            >
+                                {availability ? "Available" : "Not Available"}
+                            </span>
+                        </button>
+
+                        <div className="position-relative">
+                            <button
+                                type="button"
+                                className="btn btn-light position-relative"
+                                onClick={() =>
+                                    setNotificationOpen((value) => !value)
+                                }
+                                aria-label="Notifications"
+                            >
+                                🔔
+
+                                {notificationCount > 0 && (
+                                    <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">
+                                        {notificationCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            {notificationOpen && (
+                                <div
+                                    className="position-absolute end-0 mt-2 bg-white border rounded-3 shadow p-3"
+                                    style={{ width: 300, zIndex: 1100 }}
+                                >
+                                    <div className="fw-semibold">
+                                        Notifications
+                                    </div>
+
+                                    <hr className="my-2" />
+
+                                    {currentBookings.length === 0 ? (
+                                        <small className="text-muted">
+                                            No current bookings.
+                                        </small>
+                                    ) : (
+                                        <>
+                                            <small className="text-muted d-block mb-2">
+                                                You have{" "}
+                                                {currentBookings.length} current
+                                                booking
+                                                {currentBookings.length > 1
+                                                    ? "s"
+                                                    : ""}
+                                                .
+                                            </small>
+
+                                            {currentBookings
+                                                .slice(0, 3)
+                                                .map((booking) => (
+                                                    <button
+                                                        type="button"
+                                                        key={getBookingId(
+                                                            booking
+                                                        )}
+                                                        className="border rounded-2 p-2 mb-2 w-100 text-start bg-white"
+                                                        onClick={() => {
+                                                            setNotificationOpen(
+                                                                false
+                                                            );
+                                                            goTo("current");
+                                                        }}
+                                                    >
+                                                        <div className="fw-semibold small">
+                                                            {getService(
+                                                                booking
+                                                            )}
+                                                        </div>
+
+                                                        <div className="small text-muted">
+                                                            {getCustomer(
+                                                                booking
+                                                            )}
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="d-none d-md-flex align-items-center gap-2">
+                            <Avatar name={providerName} size={38} />
+
+                            <div>
+                                <div className="small fw-semibold">
+                                    {providerName}
+                                </div>
+                                <small className="text-muted">Provider</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+    );
+}
+
+function Overview({ providerName, dashboard, currentBookings, goTo }) {
+    const stats = dashboard?.stats || {};
+    const recentBookings = dashboard?.recentBookings || [];
+
+    const firstName = (providerName || "Provider").split(" ")[0];
+
+    return (
+        <div className="container-fluid px-3 px-md-4 py-4">
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                <div>
+                    <small className="text-success fw-semibold">
+                        DASHBOARD
+                    </small>
+
+                    <h1 className="h3 fw-bold mt-1 mb-1">
+                        Welcome back, {firstName}!
+                    </h1>
+
+                    <p className="text-muted mb-0">
+                        Here is your booking overview.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={() => goTo("current")}
+                >
+                    View Current Booking
+                </button>
+            </div>
+
+            <div className="row g-3 mb-4">
+                {[
+                    [
+                        "Total Earnings",
+                        formatMoney(stats.totalEarnings),
+                        "Completed bookings",
+                    ],
+                    [
+                        "Total Bookings",
+                        stats.totalBookings || 0,
+                        "Assigned bookings",
+                    ],
+                    [
+                        "Completed Jobs",
+                        stats.completedBookings || 0,
+                        "Completed bookings",
+                    ],
+                    [
+                        "Current Bookings",
+                        currentBookings.length,
+                        "Active assigned work",
+                    ],
+                ].map(([label, value, sub]) => (
+                    <div
+                        className="col-12 col-sm-6 col-xl-3"
+                        key={label}
+                    >
+                        <div className="card border-0 shadow-sm h-100">
+                            <div className="card-body p-3 p-md-4">
+                                <small className="text-muted">{label}</small>
+                                <div className="h3 fw-bold mb-1 mt-1">
+                                    {value}
+                                </div>
+                                <small className="text-success">{sub}</small>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="row g-3">
+                <div className="col-12 col-xl-7">
+                    <Card title="Current Booking">
+                        {currentBookings.length === 0 ? (
+                            <div className="text-muted py-4">
+                                No current booking.
+                            </div>
+                        ) : (
+                            currentBookings.slice(0, 3).map((booking) => (
+                                <div
+                                    key={getBookingId(booking)}
+                                    className="d-flex align-items-center gap-3 border-bottom py-3"
+                                >
+                                    <Avatar name={getCustomer(booking)} />
+
+                                    <div className="flex-grow-1 min-w-0">
+                                        <div className="fw-semibold text-truncate">
+                                            {getService(booking)}
+                                        </div>
+
+                                        <small className="text-muted">
+                                            {getCustomer(booking)} ·{" "}
+                                            {formatDate(
+                                                booking.bookingDate
+                                            )}
+                                        </small>
+                                    </div>
+
+                                    <div className="text-end">
+                                        <div className="fw-semibold">
+                                            {formatMoney(
+                                                getAmount(booking)
+                                            )}
+                                        </div>
+                                        <StatusBadge status={booking.status} />
+                                    </div>
+                                </div>
+                            ))
+                        )}
+
+                        {currentBookings.length > 0 && (
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-success mt-3"
+                                onClick={() => goTo("current")}
+                            >
+                                Open Current Booking
+                            </button>
+                        )}
+                    </Card>
+                </div>
+
+                <div className="col-12 col-xl-5">
+                    <Card
+                        title="Recent Bookings"
+                        action={
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-link text-success p-0 text-decoration-none"
+                                onClick={() => goTo("history")}
+                            >
+                                View history
+                            </button>
+                        }
+                    >
+                        {recentBookings.length === 0 ? (
+                            <p className="text-muted mb-0">
+                                No bookings yet.
+                            </p>
+                        ) : (
+                            recentBookings.slice(0, 5).map((booking) => (
+                                <div
+                                    key={getBookingId(booking)}
+                                    className="d-flex align-items-center gap-2 border-bottom py-2"
+                                >
+                                    <Avatar
+                                        name={getCustomer(booking)}
+                                        size={36}
+                                    />
+
+                                    <div className="flex-grow-1 min-w-0">
+                                        <div className="small fw-semibold text-truncate">
+                                            {getService(booking)}
+                                        </div>
+
+                                        <small className="text-muted text-truncate d-block">
+                                            {getCustomer(booking)}
+                                        </small>
+                                    </div>
+
+                                    <div className="text-end">
+                                        <div className="small fw-semibold">
+                                            {formatMoney(
+                                                getAmount(booking)
+                                            )}
+                                        </div>
+
+                                        <StatusBadge status={booking.status} />
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CurrentBookingCard({
+    booking,
+    onSaveBilling,
+    onStatusChange,
+    saving,
+}) {
+    const [amount, setAmount] = useState(String(getAmount(booking)));
+    const [paymentStatus, setPaymentStatus] = useState(
+        getPaymentStatus(booking)
+    );
+
+    useEffect(() => {
+        setAmount(String(getAmount(booking)));
+        setPaymentStatus(getPaymentStatus(booking));
+    }, [booking]);
+
+    const handleSave = () => {
+        const numericAmount = Number(amount);
+
+        if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+            window.alert("Please enter a valid booking amount.");
+            return;
+        }
+
+        onSaveBilling(
+            getBookingId(booking),
+            numericAmount,
+            paymentStatus
+        );
+    };
+
+    return (
+        <div className="card border-0 shadow-sm mb-3">
+            <div className="card-body p-3 p-md-4">
+                <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                        <small className="text-success fw-semibold">
+                            CURRENT BOOKING
+                        </small>
+
+                        <h2 className="h4 fw-bold mt-1 mb-1">
+                            {getService(booking)}
+                        </h2>
+
+                        <small className="text-muted">
+                            Booking #
+                            {String(getBookingId(booking))
+                                .slice(-6)
+                                .toUpperCase()}
+                        </small>
+                    </div>
+
+                    <StatusBadge status={booking.status} />
+                </div>
+
+                <hr />
+
+                <div className="row g-3">
+                    <div className="col-12 col-md-6">
+                        <div className="small text-muted">Customer</div>
+
+                        <div className="fw-semibold">
+                            {getCustomer(booking)}
+                        </div>
+
+                        {booking.user?.phoneNo && (
+                            <small className="text-muted">
+                                {booking.user.phoneNo}
+                            </small>
+                        )}
+                    </div>
+
+                    <div className="col-12 col-md-6">
+                        <div className="small text-muted">
+                            Date & Time
+                        </div>
+
+                        <div className="fw-semibold">
+                            {formatDate(booking.bookingDate)} ·{" "}
+                            {booking.bookingTime || "—"}
+                        </div>
+                    </div>
+
+                    <div className="col-12">
+                        <div className="small text-muted">Address</div>
+
+                        <div className="fw-semibold text-break">
+                            {booking.address || "—"}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="row g-3 mt-1">
+                    <div className="col-12 col-md-6">
+                        <label className="form-label fw-semibold">
+                            Booking Amount
+                        </label>
+
+                        <div className="input-group">
+                            <span className="input-group-text">₹</span>
+
+                            <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                className="form-control"
+                                value={amount}
+                                onChange={(event) =>
+                                    setAmount(event.target.value)
+                                }
+                            />
+                        </div>
+                    </div>
+
+                    <div className="col-12 col-md-6">
+                        <label className="form-label fw-semibold">
+                            Payment Status
+                        </label>
+
+                        <select
+                            className="form-select"
+                            value={paymentStatus}
+                            onChange={(event) =>
+                                setPaymentStatus(event.target.value)
+                            }
+                        >
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="failed">Failed</option>
+                            <option value="refunded">Refunded</option>
+                        </select>
+
+                        <small className="text-muted">
+                            Saved:{" "}
+                            <strong>
+                                {prettyStatus(
+                                    getPaymentStatus(booking)
+                                )}
+                            </strong>
+                        </small>
+                    </div>
+                </div>
+
+                <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap mt-4">
+                    <div>
+                        <small className="text-muted d-block">
+                            Current saved amount
+                        </small>
+
+                        <strong className="fs-5">
+                            {formatMoney(getAmount(booking))}
+                        </strong>
+                    </div>
+
+                    <div className="d-flex gap-2 flex-wrap">
+                        {booking.status === "accepted" && (
+                            <button
+                                type="button"
+                                className="btn btn-success"
+                                disabled={saving}
+                                onClick={() =>
+                                    onStatusChange(
+                                        getBookingId(booking),
+                                        "in_progress"
+                                    )
+                                }
+                            >
+                                Start Service
+                            </button>
+                        )}
+
+                        {booking.status === "in_progress" && (
+                            <button
+                                type="button"
+                                className="btn btn-success"
+                                disabled={saving}
+                                onClick={() =>
+                                    onStatusChange(
+                                        getBookingId(booking),
+                                        "completed"
+                                    )
+                                }
+                            >
+                                Mark Completed
+                            </button>
+                        )}
+
+                        {!["completed", "cancelled"].includes(
+                            booking.status
+                        ) && (
+                            <button
+                                type="button"
+                                className="btn btn-outline-danger"
+                                disabled={saving}
+                                onClick={() =>
+                                    onStatusChange(
+                                        getBookingId(booking),
+                                        "cancelled"
+                                    )
+                                }
+                            >
+                                Cancel
+                            </button>
+                        )}
+
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={saving}
+                            onClick={handleSave}
+                        >
+                            {saving
+                                ? "Saving..."
+                                : "Save Amount & Payment"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CurrentBookingsPage({
+    bookings,
+    onSaveBilling,
+    onStatusChange,
+    savingId,
+}) {
+    return (
+        <div className="container-fluid px-3 px-md-4 py-4">
+            <div className="mb-4">
+                <small className="text-success fw-semibold">
+                    ACTIVE WORK
+                </small>
+
+                <h1 className="h3 fw-bold mt-1 mb-1">
+                    Current Booking
+                </h1>
+
+                <p className="text-muted mb-0">
+                    Assigned bookings appear here automatically.
+                </p>
+            </div>
+
+            {bookings.length === 0 ? (
+                <Card>
+                    <div className="text-center py-5">
+                        <div className="display-6 mb-2">✓</div>
+                        <h5>No current booking</h5>
+                        <p className="text-muted mb-0">
+                            New assigned bookings will appear here.
+                        </p>
+                    </div>
+                </Card>
+            ) : (
+                bookings.map((booking) => (
+                    <CurrentBookingCard
+                        key={getBookingId(booking)}
+                        booking={booking}
+                        onSaveBilling={onSaveBilling}
+                        onStatusChange={onStatusChange}
+                        saving={savingId === getBookingId(booking)}
+                    />
+                ))
+            )}
+        </div>
+    );
+}
+
+function BookingHistoryPage({ bookings }) {
+    return (
+        <div className="container-fluid px-3 px-md-4 py-4">
+            <div className="mb-4">
+                <small className="text-success fw-semibold">
+                    PAST WORK
+                </small>
+
+                <h1 className="h3 fw-bold mt-1 mb-1">
+                    Booking History
+                </h1>
+
+                <p className="text-muted mb-0">
+                    Completed and cancelled bookings.
+                </p>
+            </div>
+
+            <Card>
+                <div className="table-responsive">
+                    <table className="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Booking</th>
+                                <th>Customer</th>
+                                <th>Service</th>
+                                <th>Date & Time</th>
+                                <th>Amount</th>
+                                <th>Payment</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {bookings.length === 0 ? (
+                                <tr>
+                                    <td
+                                        colSpan="7"
+                                        className="text-center text-muted py-5"
+                                    >
+                                        No booking history yet.
+                                    </td>
+                                </tr>
+                            ) : (
+                                bookings.map((booking) => (
+                                    <tr key={getBookingId(booking)}>
+                                        <td className="fw-semibold">
+                                            #
+                                            {String(
+                                                getBookingId(booking)
+                                            )
+                                                .slice(-6)
+                                                .toUpperCase()}
+                                        </td>
+
+                                        <td>
+                                            <div className="fw-semibold">
+                                                {getCustomer(booking)}
+                                            </div>
+
+                                            <small className="text-muted">
+                                                {booking.user?.phoneNo || ""}
+                                            </small>
+                                        </td>
+
+                                        <td>{getService(booking)}</td>
+
+                                        <td>
+                                            <div>
+                                                {formatDate(
+                                                    booking.bookingDate
+                                                )}
+                                            </div>
+
+                                            <small className="text-muted">
+                                                {booking.bookingTime || "—"}
+                                            </small>
+                                        </td>
+
+                                        <td className="fw-semibold">
+                                            {formatMoney(
+                                                getAmount(booking)
+                                            )}
+                                        </td>
+
+                                        <td>
+                                            <PaymentBadge
+                                                status={getPaymentStatus(
+                                                    booking
+                                                )}
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <StatusBadge
+                                                status={booking.status}
+                                            />
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+        </div>
+    );
+}
+
+function ProfilePage({ provider, availability }) {
+    return (
+        <div className="container-fluid px-3 px-md-4 py-4">
+            <div className="mb-4">
+                <small className="text-success fw-semibold">
+                    ACCOUNT
+                </small>
+
+                <h1 className="h3 fw-bold mt-1 mb-1">
+                    My Profile
+                </h1>
+
+                <p className="text-muted mb-0">
+                    Your provider account information.
+                </p>
+            </div>
+
+            <Card>
+                <div className="d-flex align-items-center gap-3 mb-4">
+                    <Avatar name={provider?.name} size={64} />
+
+                    <div>
+                        <h4 className="mb-1">
+                            {provider?.name || "Service Provider"}
+                        </h4>
+
+                        <p className="text-muted mb-0">
+                            {provider?.email || "—"}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="row g-3">
+                    <div className="col-12 col-md-6">
+                        <label className="form-label text-muted">
+                            Phone
+                        </label>
+
+                        <input
+                            className="form-control"
+                            value={provider?.phoneNo || ""}
+                            readOnly
+                        />
+                    </div>
+
+                    <div className="col-12 col-md-6">
+                        <label className="form-label text-muted">
+                            Verification
+                        </label>
+
+                        <input
+                            className="form-control"
+                            value={
+                                provider?.isVerified
+                                    ? "Verified"
+                                    : "Not Verified"
+                            }
+                            readOnly
+                        />
+                    </div>
+
+                    <div className="col-12 col-md-6">
+                        <label className="form-label text-muted">
+                            Availability
+                        </label>
+
+                        <input
+                            className="form-control"
+                            value={
+                                availability
+                                    ? "Available"
+                                    : "Not Available"
+                            }
+                            readOnly
+                        />
+                    </div>
+                </div>
+            </Card>
+        </div>
+    );
+}
+
+export default function ServiceProviderPage() {
+    const [activePage, setActivePage] = useState("overview");
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    const [provider, setProvider] = useState(null);
+    const [dashboard, setDashboard] = useState({
+        stats: {},
+        recentBookings: [],
+    });
+
+    const [currentBookings, setCurrentBookings] = useState([]);
+    const [historyBookings, setHistoryBookings] = useState([]);
+
+    const [availability, setAvailability] = useState(true);
+
+    const [loading, setLoading] = useState(true);
+    const [savingId, setSavingId] = useState(null);
+    const [error, setError] = useState("");
+
+    const [notificationOpen, setNotificationOpen] = useState(false);
+    const [notificationCount, setNotificationCount] = useState(0);
+    const [toast, setToast] = useState("");
+
+    const seenBookingIdsRef = useRef(new Set());
+    const firstLoadRef = useRef(true);
+
+    const providerName = provider?.name || "Service Provider";
+
+    const goTo = (page) => {
+        setActivePage(page);
+        setSidebarOpen(false);
+
+        if (page === "current") {
+            setNotificationCount(0);
+        }
+    };
+
+    const handleAuthError = useCallback((error) => {
+        if (error?.response?.status === 401) {
+            window.location.href = "/provider/login";
+            return true;
+        }
+
+        return false;
+    }, []);
+
+    const showToast = useCallback((message) => {
+        setToast(message);
+
+        window.setTimeout(() => {
+            setToast("");
+        }, 3500);
+    }, []);
+
+    const loadDashboard = useCallback(async () => {
+        const response = await providerApi.get("/dashboard");
+
+        setDashboard(
+            response.data || {
+                stats: {},
+                recentBookings: [],
+            }
+        );
+    }, []);
+
+    /*
+     * IMPORTANT:
+     * There is only ONE booking read route:
+     * GET /api/provider/bookings/my-bookings
+     *
+     * Current Booking and Booking History are separated here
+     * in React. No /current or /history backend route is required.
+     */
+    const loadMyBookings = useCallback(
+        async (checkForNewBookings = false) => {
+            const response = await providerApi.get(
+                "/bookings/my-bookings"
+            );
+
+            const allBookings = response.data?.bookings || [];
+
+            const current = allBookings.filter((booking) =>
+                CURRENT_STATUSES.includes(
+                    String(booking.status || "").toLowerCase()
+                )
+            );
+
+            const history = allBookings.filter((booking) =>
+                HISTORY_STATUSES.includes(
+                    String(booking.status || "").toLowerCase()
+                )
+            );
+
+            if (checkForNewBookings) {
+                const currentIds = current
+                    .map(getBookingId)
+                    .filter(Boolean);
+
+                if (!firstLoadRef.current) {
+                    const newIds = currentIds.filter(
+                        (id) => !seenBookingIdsRef.current.has(id)
+                    );
+
+                    if (newIds.length > 0) {
+                        setNotificationCount(
+                            (count) => count + newIds.length
+                        );
+
+                        showToast(
+                            `${newIds.length} new booking${
+                                newIds.length > 1 ? "s" : ""
+                            } received.`
+                        );
+                    }
+                }
+
+                seenBookingIdsRef.current = new Set(currentIds);
+            }
+
+            setCurrentBookings(current);
+            setHistoryBookings(history);
+
+            return allBookings;
+        },
+        [showToast]
+    );
+
+    const loadAllProviderData = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError("");
+
+            const [meResponse, availabilityResponse] =
+                await Promise.all([
+                    providerApi.get("/me"),
+                    providerApi.get("/availability"),
+                ]);
+
+            const providerData =
+                meResponse.data?.provider || meResponse.data;
+
+            setProvider(providerData);
+
+            setAvailability(
+                availabilityResponse.data?.isAvailable ??
+                    providerData?.isAvailable ??
+                    true
+            );
+
+            await Promise.all([
+                loadDashboard(),
+                loadMyBookings(false),
+            ]);
+
+            firstLoadRef.current = false;
+        } catch (error) {
+            console.error(
+                "Provider dashboard load error:",
+                error
+            );
+
+            if (!handleAuthError(error)) {
+                setError(
+                    error.response?.data?.message ||
+                        "Unable to load provider dashboard."
+                );
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, [
+        handleAuthError,
+        loadDashboard,
+        loadMyBookings,
+    ]);
+
+    useEffect(() => {
+        loadAllProviderData();
+    }, [loadAllProviderData]);
+
+    /*
+     * Polling is only for refreshing /my-bookings.
+     * No separate current/history endpoint is used.
+     */
+    useEffect(() => {
+        const interval = window.setInterval(async () => {
+            try {
+                await Promise.all([
+                    loadMyBookings(true),
+                    loadDashboard(),
+                ]);
+            } catch (error) {
+                if (!handleAuthError(error)) {
+                    console.error(
+                        "Provider polling error:",
+                        error
+                    );
+                }
+            }
+        }, 10000);
+
+        return () => window.clearInterval(interval);
+    }, [
+        handleAuthError,
+        loadMyBookings,
+        loadDashboard,
+    ]);
+
+    const toggleAvailability = async () => {
+        try {
+            const nextValue = !availability;
+
+            const response = await providerApi.put(
+                "/availability",
+                {
+                    isAvailable: nextValue,
+                }
+            );
+
+            const savedValue =
+                response.data?.isAvailable ?? nextValue;
+
+            setAvailability(savedValue);
+
+            setProvider((current) =>
+                current
+                    ? {
+                          ...current,
+                          isAvailable: savedValue,
+                      }
+                    : current
+            );
+
+            showToast(
+                savedValue
+                    ? "You are now available for bookings."
+                    : "Bookings are now paused."
+            );
+        } catch (error) {
+            console.error(
+                "Availability update error:",
+                error
+            );
+
+            if (!handleAuthError(error)) {
+                showToast(
+                    error.response?.data?.message ||
+                        "Failed to update availability."
+                );
+            }
+        }
+    };
+
+    /*
+     * NO /billing ROUTE.
+     *
+     * Existing backend route:
+     * PUT /api/provider/bookings/:bookingId/accept
+     *
+     * It must accept { amount, paymentStatus } when the booking
+     * already belongs to the logged-in provider.
+     */
+    const saveBookingBilling = async (
+        bookingId,
+        amount,
+        paymentStatus
+    ) => {
+        try {
+            setSavingId(bookingId);
+            setError("");
+
+            await providerApi.put(
+                `/bookings/${bookingId}/accept`,
+                {
+                    amount,
+                    paymentStatus,
+                }
+            );
+
+            await Promise.all([
+                loadMyBookings(false),
+                loadDashboard(),
+            ]);
+
+            showToast(
+                "Booking amount and payment status updated."
+            );
+        } catch (error) {
+            console.error(
+                "Booking billing update error:",
+                error
+            );
+
+            if (!handleAuthError(error)) {
+                showToast(
+                    error.response?.data?.message ||
+                        "Failed to update booking billing."
+                );
+            }
+        } finally {
+            setSavingId(null);
+        }
+    };
+
+    const updateBookingStatus = async (
+        bookingId,
+        status
+    ) => {
+        try {
+            setSavingId(bookingId);
+            setError("");
+
+            await providerApi.put(
+                `/bookings/${bookingId}/status`,
+                { status }
+            );
+
+            await Promise.all([
+                loadMyBookings(false),
+                loadDashboard(),
+            ]);
+
+            showToast(
+                `Booking marked as ${prettyStatus(status)}.`
+            );
+        } catch (error) {
+            console.error(
+                "Booking status update error:",
+                error
+            );
+
+            if (!handleAuthError(error)) {
+                showToast(
+                    error.response?.data?.message ||
+                        "Failed to update booking status."
+                );
+            }
+        } finally {
+            setSavingId(null);
+        }
+    };
+
+    const logout = async () => {
+        try {
+            await providerApi.post("/logout");
+        } catch (error) {
+            console.error("Provider logout error:", error);
+        } finally {
+            window.location.href = "/provider/login";
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="min-vh-100 bg-light d-flex align-items-center justify-content-center">
+                <div className="text-center">
+                    <div className="spinner-border text-success mb-3" />
+
+                    <div className="fw-semibold">
+                        Loading provider dashboard...
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-vh-100 bg-light">
+            <Sidebar
+                providerName={providerName}
+                activePage={activePage}
+                goTo={goTo}
+                availability={availability}
+                toggleAvailability={toggleAvailability}
+                open={sidebarOpen}
+                logout={logout}
+            />
+
+            <div>
+                <div className="d-lg-none">
+                    <Topbar
+                        providerName={providerName}
+                        availability={availability}
+                        toggleAvailability={toggleAvailability}
+                        openMenu={() => setSidebarOpen(true)}
+                        notificationCount={notificationCount}
+                        notificationOpen={notificationOpen}
+                        setNotificationOpen={
+                            setNotificationOpen
+                        }
+                        currentBookings={currentBookings}
+                        goTo={goTo}
+                    />
+                </div>
+
+                <div
+                    className="d-none d-lg-block"
+                    style={{ marginLeft: 250 }}
+                >
+                    <Topbar
+                        providerName={providerName}
+                        availability={availability}
+                        toggleAvailability={toggleAvailability}
+                        openMenu={() => setSidebarOpen(true)}
+                        notificationCount={notificationCount}
+                        notificationOpen={notificationOpen}
+                        setNotificationOpen={
+                            setNotificationOpen
+                        }
+                        currentBookings={currentBookings}
+                        goTo={goTo}
+                    />
+                </div>
+
+                {error && (
+                    <div className="container-fluid px-3 px-md-4 pt-3">
+                        <div className="alert alert-danger d-flex justify-content-between align-items-start gap-3">
+                            <span>{error}</span>
+
+                            <button
+                                type="button"
+                                className="btn-close"
+                                onClick={() => setError("")}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {toast && (
+                    <div
+                        className="position-fixed top-0 start-50 translate-middle-x p-3"
+                        style={{
+                            zIndex: 2000,
+                            marginTop: 70,
+                        }}
+                    >
+                        <div className="alert alert-success shadow mb-0">
+                            {toast}
+                        </div>
+                    </div>
+                )}
+
+                <main
+                    style={{
+                        marginLeft:
+                            window.innerWidth >= 992 ? 250 : 0,
+                    }}
+                >
+                    {activePage === "overview" && (
+                        <Overview
+                            providerName={providerName}
+                            dashboard={dashboard}
+                            currentBookings={currentBookings}
+                            goTo={goTo}
+                        />
+                    )}
+
+                    {activePage === "current" && (
+                        <CurrentBookingsPage
+                            bookings={currentBookings}
+                            onSaveBilling={saveBookingBilling}
+                            onStatusChange={updateBookingStatus}
+                            savingId={savingId}
+                        />
+                    )}
+
+                    {activePage === "history" && (
+                        <BookingHistoryPage
+                            bookings={historyBookings}
+                        />
+                    )}
+
+                    {activePage === "profile" && (
+                        <ProfilePage
+                            provider={provider}
+                            availability={availability}
+                        />
+                    )}
+                </main>
+            </div>
+        </div>
+    );
+}

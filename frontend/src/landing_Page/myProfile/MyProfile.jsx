@@ -909,16 +909,13 @@ const MyProfile = () => {
 
               {/* ================= ORDER HISTORY ================= */}
 
-              <div className="section-card">
+              <div className="section-card order-history-section">
 
-                <div className="section-header">
+                <div className="section-header order-history-header">
 
                   <div>
                     <h5>Order History</h5>
-
-                    <p>
-                      View your previous Homigo bookings.
-                    </p>
+                    <p>View your previous Homigo bookings.</p>
                   </div>
 
                   <span className="order-count">
@@ -927,177 +924,137 @@ const MyProfile = () => {
 
                 </div>
 
-
                 {loadingOrders ? (
 
-                  <div className="empty-state">
-                    <div className="small-spinner"></div>
-
-                    <strong>
-                      Loading orders...
-                    </strong>
+                  <div className="order-scroll-box order-loading-box">
+                    <div className="empty-state">
+                      <div className="small-spinner"></div>
+                      <strong>Loading orders...</strong>
+                    </div>
                   </div>
 
                 ) : ordersError ? (
 
-                  <div className="empty-state">
-
-                    <div className="empty-icon">
-                      ⚠️
+                  <div className="order-scroll-box">
+                    <div className="empty-state">
+                      <div className="empty-icon">⚠️</div>
+                      <h6>Unable to load orders</h6>
+                      <div className="alert alert-danger py-2">
+                        {ordersError}
+                      </div>
+                      <button
+                        className="secondary-button"
+                        onClick={fetchOrders}
+                      >
+                        Try Again
+                      </button>
                     </div>
-
-                    <h6>
-                      Unable to load orders
-                    </h6>
-
-                    <div className="alert alert-danger py-2">
-                      {ordersError}
-                    </div>
-
-                    <button
-                      className="secondary-button"
-                      onClick={fetchOrders}
-                    >
-                      Try Again
-                    </button>
-
                   </div>
 
                 ) : orders.length === 0 ? (
 
-                  <div className="empty-state">
-
-                    <div className="empty-icon">
-                      📦
+                  <div className="order-scroll-box">
+                    <div className="empty-state">
+                      <div className="empty-icon">📦</div>
+                      <h6>No orders yet</h6>
+                      <p>Your Homigo bookings will appear here.</p>
                     </div>
-
-                    <h6>
-                      No orders yet
-                    </h6>
-
-                    <p>
-                      Your Homigo bookings will appear here.
-                    </p>
-
                   </div>
 
                 ) : (
 
-                  orders.map((order) => {
+                  <div className="order-scroll-box">
+                    <div className="order-list">
 
-                    const status =
-                      getStatus(order.status);
+                      {orders.map((order) => {
 
-                    return (
-                      <div
-                        className="order-card"
-                        key={order._id}
-                      >
+                        const status = getStatus(order.status);
 
-                        <div className="order-top">
+                        return (
+                          <div className="order-card" key={order._id}>
 
-                          <div className="service-info">
+                            {/* ORDER HEADER */}
+                            <div className="order-top">
 
-                            <div className="service-icon">
-                              🛠️
+                              <div className="service-info">
+
+                                <div className="service-icon">
+                                  🛠️
+                                </div>
+
+                                <div className="service-text">
+                                  <strong>
+                                    {order.serviceName || "Service"}
+                                  </strong>
+
+                                  <div className="order-id">
+                                    Order ID: {order._id}
+                                  </div>
+                                </div>
+
+                              </div>
+
+                              <span
+                                className="status-badge"
+                                style={{
+                                  background: status.background,
+                                  color: status.color,
+                                  borderColor: status.border,
+                                }}
+                              >
+                                <span
+                                  className="status-dot"
+                                  style={{
+                                    background: status.dot,
+                                  }}
+                                />
+                                {order.status || "Pending"}
+                              </span>
+
                             </div>
 
-                            <div>
+                            {/* ORDER DETAILS */}
+                            <div className="row g-2 order-details">
 
-                              <strong>
-                                {order.serviceName ||
-                                  "Service"}
-                              </strong>
+                              <div className="col-6 col-md-4">
+                                <div className="order-detail-box">
+                                  <small>📅 Date</small>
+                                  <strong>
+                                    {formatDate(order.bookingDate)}
+                                  </strong>
+                                </div>
+                              </div>
 
-                              <div className="order-id">
-                                Order ID: {order._id}
+                              <div className="col-6 col-md-4">
+                                <div className="order-detail-box">
+                                  <small>🕐 Time</small>
+                                  <strong>
+                                    {order.bookingTime || "N/A"}
+                                  </strong>
+                                </div>
+                              </div>
+
+                              <div className="col-12 col-md-4">
+                                <div className="order-detail-box amount">
+                                  <small>💰 Total Amount</small>
+                                  <strong>
+                                    ₹
+                                    {Number(
+                                      order.totalAmount || 0
+                                    ).toLocaleString("en-IN")}
+                                  </strong>
+                                </div>
                               </div>
 
                             </div>
 
                           </div>
+                        );
+                      })}
 
+                    </div>
+                  </div>
 
-                          <span
-                            className="status-badge"
-                            style={{
-                              background:
-                                status.background,
-                              color: status.color,
-                              borderColor:
-                                status.border,
-                            }}
-                          >
-
-                            <span
-                              className="status-dot"
-                              style={{
-                                background:
-                                  status.dot,
-                              }}
-                            />
-
-                            {order.status ||
-                              "Pending"}
-
-                          </span>
-
-                        </div>
-
-
-                        <div className="row order-details">
-
-                          <div className="col-6 col-md-4">
-
-                            <small>
-                              Date
-                            </small>
-
-                            <strong>
-                              {formatDate(
-                                order.bookingDate
-                              )}
-                            </strong>
-
-                          </div>
-
-
-                          <div className="col-6 col-md-4">
-
-                            <small>
-                              Time
-                            </small>
-
-                            <strong>
-                              {order.bookingTime ||
-                                "N/A"}
-                            </strong>
-
-                          </div>
-
-
-                          <div className="col-12 col-md-4 amount">
-
-                            <small>
-                              Total Amount
-                            </small>
-
-                            <strong>
-                              ₹
-                              {Number(
-                                order.totalAmount || 0
-                              ).toLocaleString(
-                                "en-IN"
-                              )}
-                            </strong>
-
-                          </div>
-
-                        </div>
-
-                      </div>
-                    );
-                  })
                 )}
 
               </div>
@@ -1446,11 +1403,58 @@ const styles = `
     white-space: nowrap;
   }
 
+  /* ORDER HISTORY SCROLL AREA */
+  .order-history-section {
+    overflow: hidden;
+  }
+
+  .order-history-header {
+    margin-bottom: 18px;
+  }
+
+  .order-scroll-box {
+    height: 520px;
+    max-height: 520px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 8px 4px 2px;
+    border: 1px solid #eef0f2;
+    border-radius: 14px;
+    background: #fafbfb;
+    scrollbar-width: thin;
+    scrollbar-color: #b7ddd7 transparent;
+  }
+
+  .order-scroll-box::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .order-scroll-box::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .order-scroll-box::-webkit-scrollbar-thumb {
+    background: #b7ddd7;
+    border-radius: 10px;
+  }
+
+  .order-scroll-box::-webkit-scrollbar-thumb:hover {
+    background: #8bcac0;
+  }
+
+  .order-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
   .order-card {
     border: 1px solid #e8eaed;
     border-radius: 14px;
-    padding: 18px;
-    margin-bottom: 12px;
+    padding: 16px;
+    margin: 0;
+    background: #fff;
+    width: 100%;
   }
 
   .order-card:last-child {
@@ -1490,6 +1494,46 @@ const styles = `
     font-size: 11px;
     color: #9ca3af;
     word-break: break-all;
+  }
+
+  .service-text {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .service-text strong {
+    display: block;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .order-detail-box {
+    min-width: 0;
+    height: 100%;
+    padding: 10px 12px;
+    border: 1px solid #eef0f2;
+    border-radius: 10px;
+    background: #fafafa;
+  }
+
+  .order-detail-box small {
+    display: block;
+    color: #6b7280;
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+
+  .order-detail-box strong {
+    display: block;
+    font-size: 13px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .order-loading-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .status-badge {
@@ -1683,12 +1727,23 @@ const styles = `
       padding: 0;
     }
 
+    .order-scroll-box {
+      height: 460px;
+      max-height: 460px;
+      padding: 3px 5px 3px 2px;
+    }
+
     .order-card {
       padding: 14px;
     }
 
     .order-top {
       flex-direction: column;
+      gap: 10px;
+    }
+
+    .status-badge {
+      align-self: flex-start;
     }
   }
 `;

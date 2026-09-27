@@ -5,19 +5,19 @@ const BookingSchema = new Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "user",
       required: true,
     },
 
     service: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Service",
+      ref: "service",
       required: true,
     },
 
     provider: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Professional",
+      ref: "provider",
       default: null,
     },
 

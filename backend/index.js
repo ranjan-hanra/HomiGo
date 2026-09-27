@@ -8,10 +8,17 @@ const cookieParser = require("cookie-parser")
 
 const authRoute = require("./Routes/AuthRoute")
 const UserRoute = require("./Routes/UserRoute");
+const providerAuthRoutes = require("./Routes/ProviderAuthRoutes");
+const providerDashboardRoutes =
+    require("./Routes/ProviderDashboardRoutes");
+const providerBookingRoutes = require("./Routes/ProviderBookingRoutes");
+const providerAvailabilityRoutes = require("./Routes/ProviderAvailabilityRoutes");
+
 const verifyToken = require("./Middlewares/AuthMiddlewares");
 
 const { ServicesModel } = require('./model/ServicesModel')
 const { BookingModel } = require('./model/BookingMdel')
+const ProviderModel = require("./model/ProviderModel");
 
 const PORT = process.env.PORT || 3002
 const uri = process.env.MONGO_URI;
@@ -207,73 +214,114 @@ app.get('/allservices', async (req, res) => {
 });
 
 app.post("/newbooking", verifyToken, async (req, res) => {
-
     try {
+        // Find an available and verified provider
+        const provider = await ProviderModel.findOne({
+            isAvailable: true,
+            isVerified: true
+        });
+
+        if (!provider) {
+            return res.status(400).json({
+                success: false,
+                message: "No provider is currently available"
+            });
+        }
 
         const newBooking = new BookingModel({
-
             user: req.userId,
 
             service: req.body.service,
 
-            professional: req.body.professional || null,
+            // IMPORTANT:
+            // BookingSchema uses "provider", not "professional"
+            provider: provider._id,
 
             serviceName: req.body.serviceName,
-
             bookingTime: req.body.bookingTime,
-
             bookingDate: req.body.bookingDate,
 
             quantity: req.body.quantity || 1,
-
             price: req.body.price,
-
             totalAmount: req.body.totalAmount,
 
             phoneNo: req.body.phoneNo,
-
             address: req.body.address,
 
-            status: req.body.status || "pending",
+            status: "accepted",
 
             paymentStatus: req.body.paymentStatus || "pending",
         });
 
         await newBooking.save();
 
-        res.send("Booking saved!");
+        res.status(201).json({
+            success: true,
+            message: "Booking saved and assigned to provider",
+            booking: newBooking
+        });
 
     } catch (error) {
+        console.error("Booking Error:", error);
 
-        console.error(error);
-
-        res.status(500).send("Error saving booking");
-
+        res.status(500).json({
+            success: false,
+            message: "Error saving booking",
+            error: error.message
+        });
     }
 });
+
 
 app.get("/mybookings", verifyToken, async (req, res) => {
     try {
-
-        const bookings = await BookingModel
-            .find({ user: req.userId })
+        const bookings = await BookingModel.find({
+            user: req.userId
+        })
+            .populate("service", "name")
             .sort({ createdAt: -1 });
 
-        return res.status(200).json({
+        // Add provider details manually
+        const bookingsWithProvider = await Promise.all(
+            bookings.map(async (booking) => {
+
+                let provider = null;
+
+                if (booking.provider) {
+                    provider = await ProviderModel.findById(
+                        booking.provider
+                    ).select("name phoneNo");
+                }
+
+                return {
+                    ...booking.toObject(),
+                    provider: provider
+                        ? {
+                              name: provider.name,
+                              phoneNo: provider.phoneNo
+                          }
+                        : null
+                };
+            })
+        );
+
+        res.status(200).json({
             success: true,
-            bookings,
+            bookings: bookingsWithProvider
         });
 
     } catch (error) {
+        console.error("Get My Bookings Error:", error);
 
-        console.error("My Bookings Error:", error);
-
-        return res.status(500).json({
+        res.status(500).json({
             success: false,
-            message: "Unable to fetch bookings",
+            message: "Failed to fetch bookings",
+            error: error.message
         });
     }
 });
+
+
 app.post("/logout", (req, res) => {
     res.clearCookie("token", {
         httpOnly: true,
@@ -286,9 +334,30 @@ app.post("/logout", (req, res) => {
     });
 });
 
+
+
 app.use("/", authRoute);
 app.use("/", UserRoute);
+app.use(
+    "/api/provider",
+    providerAuthRoutes
+);
+
+app.use(
+    "/api/provider/dashboard",
+    providerDashboardRoutes
+);
+
+app.use(
+    "/api/provider/bookings",
+    providerBookingRoutes
+);
+app.use(
+    "/api/provider/availability",
+    providerAvailabilityRoutes
+);
+
 app.listen(PORT, () => {
     console.log("app started")
-   
+
 })
