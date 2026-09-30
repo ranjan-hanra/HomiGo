@@ -1,20 +1,56 @@
-
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminButton from "./admin/AdminButton";
 import "./Navbar.css";
 import axios from "axios";
+
 function Navbar() {
     const location = useLocation();
     const navigate = useNavigate();
 
-    const [user, setUser] = useState(() => {
-        const savedUser = localStorage.getItem("user");
-
-        return savedUser ? JSON.parse(savedUser) : null;
-    });
+    // User will come ONLY from backend
+    const [user, setUser] = useState(null);
 
     const [showProfile, setShowProfile] = useState(false);
+
+    // =========================
+    // GET USER PROFILE
+    // =========================
+    const getProfile = async () => {
+        try {
+            const response = await axios.get(
+                `${import.meta.env.VITE_API_URL}/profile`,
+                {
+                    withCredentials: true,
+                }
+            );
+
+            console.log("Profile response:", response.data);
+
+            // Supports both:
+            // { fullname, email }
+            // and
+            // { user: { fullname, email } }
+            const profileData = response.data.user || response.data;
+
+            setUser(profileData);
+
+        } catch (error) {
+            console.log(
+                "Profile fetch error:",
+                error.response?.data || error.message
+            );
+
+            setUser(null);
+        }
+    };
+
+    // Fetch profile whenever route changes.
+    // This also runs after login when user is redirected.
+    useEffect(() => {
+        getProfile();
+    }, [location.pathname]);
+
 
     // Get initials from full name
     const getInitials = (fullname) => {
@@ -32,23 +68,28 @@ function Navbar() {
         );
     };
 
-    // Logout
+
+    // =========================
+    // LOGOUT
+    // =========================
     const handleLogout = async () => {
         try {
             await axios.post(
-                "http://localhost:3002/logout",
+                `${import.meta.env.VITE_API_URL}/logout`,
                 {},
-                { withCredentials: true }
+                {
+                    withCredentials: true,
+                }
             );
         } catch (error) {
             console.error("Logout error:", error);
         }
 
-        localStorage.removeItem("user");
         setUser(null);
         setShowProfile(false);
         navigate("/");
     };
+
 
     return (
         <>
@@ -104,10 +145,11 @@ function Navbar() {
                             {/* Services */}
                             <li className="nav-item">
                                 <Link
-                                    className={`nav-link ${location.pathname === "/services"
-                                        ? "active-nav"
-                                        : ""
-                                        }`}
+                                    className={`nav-link ${
+                                        location.pathname === "/services"
+                                            ? "active-nav"
+                                            : ""
+                                    }`}
                                     to="/services"
                                 >
                                     Services
@@ -117,10 +159,11 @@ function Navbar() {
                             {/* Careers */}
                             <li className="nav-item">
                                 <Link
-                                    className={`nav-link ${location.pathname === "/careers"
-                                        ? "active-nav"
-                                        : ""
-                                        }`}
+                                    className={`nav-link ${
+                                        location.pathname === "/careers"
+                                            ? "active-nav"
+                                            : ""
+                                    }`}
                                     to="/careers"
                                 >
                                     Careers
@@ -128,27 +171,29 @@ function Navbar() {
                             </li>
 
                             {/* My Bookings */}
-                            {user &&
-                                (<li className="nav-item">
+                            {user && (
+                                <li className="nav-item">
                                     <Link
-                                        className={`nav-link ${location.pathname === "/mybookings"
-                                            ? "active-nav"
-                                            : ""
-                                            }`}
+                                        className={`nav-link ${
+                                            location.pathname === "/mybookings"
+                                                ? "active-nav"
+                                                : ""
+                                        }`}
                                         to="/mybookings"
                                     >
                                         My Bookings
                                     </Link>
-                                </li>)
-                            }
+                                </li>
+                            )}
 
                             {/* Support */}
                             <li className="nav-item">
                                 <Link
-                                    className={`nav-link ${location.pathname === "/support"
-                                        ? "active-nav"
-                                        : ""
-                                        }`}
+                                    className={`nav-link ${
+                                        location.pathname === "/support"
+                                            ? "active-nav"
+                                            : ""
+                                    }`}
                                     to="/support"
                                 >
                                     Support
@@ -305,9 +350,7 @@ function Navbar() {
                                                     {user.fullname}
                                                 </div>
 
-                                                <small
-                                                    className="text-secondary"
-                                                >
+                                                <small className="text-secondary">
                                                     {user.email}
                                                 </small>
                                             </div>
@@ -353,4 +396,3 @@ function Navbar() {
 }
 
 export default Navbar;
-

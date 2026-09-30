@@ -21,7 +21,7 @@ function getBookingId(booking) {
 }
 
 function getCustomer(booking) {
-    return booking?.user?.name || booking?.customerName || "Customer";
+    return booking?.user?.fullname || booking?.fullname || "Customer";
 }
 
 function getService(booking) {

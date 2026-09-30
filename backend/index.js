@@ -27,7 +27,7 @@ const app = express();
 
 app.use(
     cors({
-        origin: ["http://localhost:5173"],
+        origin: process.env.VITE_APP_URL,
         credentials: true,
     })
 );
@@ -235,7 +235,7 @@ app.post("/newbooking", verifyToken, async (req, res) => {
 
             // IMPORTANT:
             // BookingSchema uses "provider", not "professional"
-            provider: provider._id,
+            provider: provider._id || null,
 
             serviceName: req.body.serviceName,
             bookingTime: req.body.bookingTime,

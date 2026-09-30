@@ -225,7 +225,7 @@ const getMyBookings = async (req, res) => {
         const bookings = await BookingModel.find({
             provider: providerId
         })
-            .populate("user", "name email phoneNo")
+            .populate("user", "fullname email phoneNo")
             .populate("service", "name")
             .sort({ createdAt: -1 });
 
